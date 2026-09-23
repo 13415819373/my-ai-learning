@@ -1,0 +1,30 @@
+# ============ 依赖与构建产物 ============
+# 前端
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# 后端（Maven）
+backend/target/
+backend/upload/
+
+# ============ 上传的本地文件 ============
+# 后端运行目录下的文件上传目录
+upload/
+
+# ============ IDE / 编辑器 ============
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# ============ 操作系统文件 ============
+.DS_Store
+Thumbs.db
+
+# ============ 日志与临时文件 ============
+*.log
+logs/
+*.tmp
+*.temp
