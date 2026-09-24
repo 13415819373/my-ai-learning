@@ -75,7 +75,7 @@ npm install
 npm run dev
 ```
 
-浏览器访问 `http://localhost:6000`。Vite 已配置 `/api` 代理转发到后端，无跨域问题。
+浏览器访问 `http://localhost:6100`。Vite 已配置 `/api` 代理转发到后端，无跨域问题。
 
 ## 演示账号
 

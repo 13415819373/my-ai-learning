@@ -16,7 +16,21 @@ http.interceptors.request.use((config) => {
 
 // 响应拦截：统一处理错误码
 http.interceptors.response.use(
-  (res) => res.data,
+  (res) => {
+    const body = res.data
+    if (body && body.code !== undefined && body.code !== 200) {
+      // 业务层错误（如 500、401 等）
+      if (body.code === 401) {
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login'
+        }
+      }
+      return Promise.reject(new Error(body.message || '请求失败'))
+    }
+    return body
+  },
   (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem('token')

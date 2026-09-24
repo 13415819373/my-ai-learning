@@ -6,9 +6,16 @@ spring:
     name: ai-train-platform
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/ai_train_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:3306/ai_train_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
     username: root
-    password: root
+    password: zyn1542880368
+  sql:
+    init:
+      # 只在首次建库时手动执行一次 init.sql，启动时不重跑，避免种子数据重复插入
+      mode: never
+      schema-locations: classpath:sql/init.sql
+      continue-on-error: true
+      encoding: UTF-8
   servlet:
     multipart:
       max-file-size: 20MB
@@ -21,9 +28,6 @@ mybatis-plus:
   global-config:
     db-config:
       id-type: auto
-      logic-delete-field: deleted
-      logic-delete-value: 1
-      logic-not-delete-value: 0
 
 # 文件上传本地存储目录（相对路径基于运行目录，也可配置为绝对路径）
 file:

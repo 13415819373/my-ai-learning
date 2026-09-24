@@ -22,6 +22,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public Result<Void> handleOther(Exception e) {
         log.error("系统异常", e);
-        return Result.error(500, "系统异常：" + e.getMessage());
+        String msg = e.getMessage();
+        if (msg == null && e.getCause() != null) {
+            msg = e.getCause().getMessage();
+        }
+        if (msg == null) {
+            msg = e.getClass().getSimpleName();
+        }
+        return Result.error(500, "系统异常：" + msg);
     }
 }
