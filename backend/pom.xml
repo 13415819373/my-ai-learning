@@ -90,6 +90,14 @@
                     </excludes>
                 </configuration>
             </plugin>
+            <!-- 强制每次覆盖资源，避免 target 缓存旧 init.sql（改了 SQL 不用 mvn clean） -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <configuration>
+                    <overwrite>true</overwrite>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>

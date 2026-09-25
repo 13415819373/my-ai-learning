@@ -6,6 +6,7 @@ import TaskList from './pages/TaskList'
 import TaskDetail from './pages/TaskDetail'
 import MyHomeworks from './pages/MyHomeworks'
 import ReviewList from './pages/ReviewList'
+import CoursePreview from './pages/CoursePreview'
 import Layout from './components/Layout'
 
 function RequireAuth({ children }) {
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route element={<Layout />}>
           <Route path="/" element={<RequireAuth><StageList /></RequireAuth>} />
+          <Route path="/preview" element={<CoursePreview />} />
           <Route path="/stage/:stageId/tasks" element={<RequireAuth><TaskList /></RequireAuth>} />
           <Route path="/task/:taskId" element={<RequireAuth><TaskDetail /></RequireAuth>} />
           <Route path="/homeworks" element={<RequireAuth><MyHomeworks /></RequireAuth>} />
