@@ -13,7 +13,7 @@ spring:
   sql:
     init:
       # 开发期 always（每次启动 DROP 重建表 + 灌种子）；生产环境用 Docker 时注入 never
-      mode: ${SQL_INIT_MODE:always}
+      mode: ${SQL_INIT_MODE:never}
       schema-locations: classpath:sql/init.sql
       continue-on-error: true
       encoding: UTF-8
