@@ -1,0 +1,503 @@
+-- =============================================
+-- AI 自学实训平台 数据库初始化脚本
+-- 开发期模式：每次启动 DROP 重建表 + 灌种子
+-- 改了本文件，重启后端立即生效（pom.xml 已配 resources overwrite=true）
+-- 上线前请改为幂等模式（CREATE IF NOT EXISTS + INSERT IGNORE）或关闭 spring.sql.init
+-- =============================================
+
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- 按依赖反序删除旧表
+DROP TABLE IF EXISTS `homework_review`;
+DROP TABLE IF EXISTS `homework`;
+DROP TABLE IF EXISTS `resource`;
+DROP TABLE IF EXISTS `task`;
+DROP TABLE IF EXISTS `train_stage`;
+DROP TABLE IF EXISTS `user`;
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- ---------------- 用户表 ----------------
+CREATE TABLE `user` (
+  `id`          BIGINT       NOT NULL AUTO_INCREMENT,
+  `username`    VARCHAR(50)  NOT NULL COMMENT '账号',
+  `password`    VARCHAR(100) NOT NULL COMMENT 'MD5密码',
+  `nickname`    VARCHAR(50)  DEFAULT NULL COMMENT '昵称',
+  `role`        VARCHAR(20)  NOT NULL DEFAULT 'student' COMMENT 'student/teacher/admin',
+  `create_time` DATETIME     DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_username` (`username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
+
+-- ---------------- 实训阶段表 ----------------
+CREATE TABLE `train_stage` (
+  `id`          BIGINT       NOT NULL AUTO_INCREMENT,
+  `stage_name`  VARCHAR(100) NOT NULL COMMENT '阶段名称',
+  `sort`        INT          NOT NULL DEFAULT 0 COMMENT '排序',
+  `description` TEXT         COMMENT '阶段简介',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_name` (`stage_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='实训阶段表';
+
+-- ---------------- 任务卡片表 ----------------
+CREATE TABLE `task` (
+  `id`             BIGINT       NOT NULL AUTO_INCREMENT,
+  `stage_id`       BIGINT       NOT NULL,
+  `task_title`     VARCHAR(200) NOT NULL COMMENT '任务标题',
+  `task_content`   TEXT         NOT NULL COMMENT '任务描述/带教步骤（编号行会被前端解析成可勾选步骤）',
+  `submit_require` TEXT         COMMENT '提交物清单',
+  `score_rule`     TEXT         COMMENT '评分标准',
+  `sort`           INT          NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `idx_stage` (`stage_id`),
+  UNIQUE KEY `uk_stage_sort` (`stage_id`, `sort`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='任务卡片表';
+
+-- ---------------- 微课资源表（按需查阅的帮助文档） ----------------
+CREATE TABLE `resource` (
+  `id`          BIGINT       NOT NULL AUTO_INCREMENT,
+  `task_id`     BIGINT       DEFAULT NULL,
+  `title`       VARCHAR(200) NOT NULL,
+  `video_url`   VARCHAR(500) DEFAULT NULL,
+  `description` TEXT,
+  PRIMARY KEY (`id`),
+  KEY `idx_task` (`task_id`),
+  UNIQUE KEY `uk_task_title` (`task_id`, `title`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='微课资源表';
+
+-- ---------------- 作业表 ----------------
+CREATE TABLE `homework` (
+  `id`          BIGINT       NOT NULL AUTO_INCREMENT,
+  `user_id`     BIGINT       NOT NULL,
+  `task_id`     BIGINT       NOT NULL,
+  `ai_dialog`   TEXT         COMMENT '粘贴的AI对话文本',
+  `file_urls`   VARCHAR(2000) DEFAULT NULL COMMENT '上传文件地址，逗号分隔',
+  `status`      VARCHAR(20)  NOT NULL DEFAULT 'pending' COMMENT 'pending/reviewed',
+  `submit_time` DATETIME     DEFAULT CURRENT_TIMESTAMP,
+  `deleted`     INT          NOT NULL DEFAULT 0 COMMENT '逻辑删除 0/1',
+  PRIMARY KEY (`id`),
+  KEY `idx_user` (`user_id`),
+  KEY `idx_task` (`task_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='作业表';
+
+-- ---------------- 作业批改表 ----------------
+CREATE TABLE `homework_review` (
+  `id`          BIGINT       NOT NULL AUTO_INCREMENT,
+  `homework_id` BIGINT       NOT NULL,
+  `teacher_id`  BIGINT       NOT NULL,
+  `score`       INT          NOT NULL COMMENT '0-100',
+  `comment`     TEXT,
+  `review_time` DATETIME     DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_homework` (`homework_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='作业批改表';
+
+-- =============================================
+-- 种子数据（表是新建的，直接 INSERT）
+-- =============================================
+
+-- 示例账号（密码均为 123456，MD5）
+INSERT INTO `user` (`username`, `password`, `nickname`, `role`) VALUES
+('admin',  'e10adc3949ba59abbe56e057f20f883e', '管理员', 'admin'),
+('teacher','e10adc3949ba59abbe56e057f20f883e', '张导师', 'teacher'),
+('student','e10adc3949ba59abbe56e057f20f883e', '学员小明', 'student');
+
+-- =============================================
+-- 课程主线：1 门课 = AI 答疑机器人，5 步倒推
+-- 和前端 mock aiRobotCourse.js 完全一致
+-- =============================================
+INSERT INTO `train_stage` (`stage_name`, `sort`, `description`) VALUES
+('AI 答疑机器人', 1, '5 步造一个能回答本校知识的机器人，做完能写进简历');
+
+-- 5 步任务（content/submit/score 与 mock 完全一致）
+INSERT INTO `task` (`stage_id`, `task_title`, `task_content`, `submit_require`, `score_rule`, `sort`) VALUES
+(1, '让机器人先会说话：跑通一个大模型', '目标：让机器人先会说话——用 DeepSeek 跑通一个大模型，在命令行里就能跟它聊天，第一版机器人今天就活起来。
+怎么动手：
+1. 注册 DeepSeek 拿密钥：浏览器打开 https://platform.deepseek.com ，用手机号或微信登录；登录后左边菜单点「API Keys」→ 点「创建 API Key」→ 名字随便填（比如 test）→ 点确定；弹出一串 sk- 开头的长串，这就是你的密钥，马上复制保存到记事本（关掉弹窗就再也看不到了）；
+验收：手上有一个 sk- 开头的密钥，能粘贴出来。
+2. 下载 Python 安装包：去 https://www.python.org/downloads 点页面上那个黄色大按钮（Download Python 3.x.x），等下载完；
+验收：电脑下载好了 Python 安装包，能双击打开安装界面。
+3. 安装 Python：在安装界面**最关键的一步**——一定要勾上底部的「Add Python to PATH」这个选项（不勾的话终端会找不到 python 命令，后面全卡住），勾上之后点 Install Now 等它装完；
+验收：安装完成，界面显示 Setup was successful 或类似的绿色成功提示。
+4. 验证 Python 装好了：打开终端（Windows 按 Win+R 输 cmd 回车，Mac 打开「终端」app），输 python --version 回车；
+验收：终端显示 Python 3.x（比如 Python 3.12.4），说明 Python 装好了、能用了。
+5. 装 openai 库：终端里输 pip install openai 回车，等它下载安装完（会刷一堆进度条，最后显示 Successfully installed）；
+验收：终端再输 pip show openai 看到 Name: openai，说明这个库装好了。
+6. 搞懂这个 openai 库是干嘛的（很重要，别跳过）：这个库只是个帮你发网络请求的工具，名字叫 openai 但不代表你只能用 OpenAI 公司的服务，更不用去改它的源码——你接下来在自己写的代码里会写一个参数叫 base_url，填哪个网址它就把请求发给谁，你填 https://api.deepseek.com 它就发给 DeepSeek，所以装这一个库就能调 DeepSeek；装完也不用管它下载到电脑哪个文件夹了，你在代码里写一行 from openai import OpenAI 就能调用，不用手动找文件；不是非得用这个库，Python 自带的 requests 也能调 DeepSeek，但 openai 库代码最短最适合新手，所以先用它；还有个模型档位要记一下：代码里 model 参数填 deepseek-flash 就是便宜档（V4.1 Flash，跑一句"你好"几厘钱），另有个 deepseek-v4-pro 是贵档（贵约 3-4 倍），新手先用 flash 就行便宜够用；
+验收：能跟自己说一遍「base_url 参数填谁的网址，请求就发给谁」这句话，说明你懂了这个库的原理，下一步写代码就不懵了。
+7. 新建文件 chat.py：在桌面建个文件夹叫 airobot，进去，新建一个文件叫 chat.py（注意后缀必须是 .py 不是 .txt；Windows 如果看不到后缀名，去文件夹顶部「查看」里勾上「文件扩展名」）；把下面这段代码整个复制进去保存：
+```
+from openai import OpenAI
+
+# ↓↓↓ 把下面引号里的内容换成你第 1 步拿到的 sk- 开头密钥
+client = OpenAI(
+    api_key="这里贴你的DeepSeek密钥",
+    base_url="https://api.deepseek.com"  # 这是 DeepSeek 的网址，不用改
+)
+
+# ↓↓↓ 把"你好"两个字换成你想问的问题
+reply = client.chat.completions.create(
+    model="deepseek-flash",
+    messages=[
+        {"role": "user", "content": "你好"}
+    ]
+)
+
+print(reply.choices[0].message.content)
+```
+验收：chat.py 文件保存好了，打开能看到上面这段代码，api_key 引号里已经换成你的真实密钥了。
+8. 运行你的机器人：终端里先输 cd Desktop/airobot（Mac）或 cd %USERPROFILE%\\Desktop\\airobot（Windows）进到文件夹；然后输 python chat.py 回车；
+验收：终端打印出机器人的一句话回答（你问"你好"，它回"你好！有什么可以帮你"之类的），第一版机器人活了。
+9. 改问题再聊：把代码里"你好"改成"你叫什么"，保存，再跑 python chat.py；再改成别的问题再跑一次；
+验收：连续改 3 个问题各跑一次、机器人每句都回话，第 1 步完成。
+不懂的概念当场补：什么是 API（一个网址，你按格式发请求它就回数据）、什么是密钥（证明你是谁的密码串）、pip 是什么（Python 的软件管家，pip install xxx 就是装软件）、大模型怎么收费（按字数算，DeepSeek 很便宜，调几百次也就几分钱）。
+AI 协作训练点：先自己猜「调大模型的代码大概长啥样」（不许先问 AI），再让 AI 给你代码，报错了和 AI 一起排查，最后找出 AI 给的代码至少 1 处可优化。', 'API 密钥（脱敏）+ 对话代码 + 终端聊天截图 + AI 代码缺陷批注', '先猜再问 AI 30 / 提示词精准 30 / 识别 AI 缺陷 25 / 机器人能聊 15', 1),
+(1, '让机器人懂本校知识：灌文档做 RAG 检索', '目标：让机器人懂本校知识——把课程文档灌进向量库，机器人回答能引用本校内容，而不是瞎编。
+怎么动手：
+1. 下载示例课程讲义 PDF：点下面绿色按钮下载一份做好的示例讲义（内容是智能问答系统课程的讲义，含成绩评定、教学大纲、实验要求等，后面机器人就检索这份资料回答你的问题）；如果你自己手上有真实讲义 PDF 也可以用自己的；
+下载：讲义.pdf
+验收：电脑下载好 讲义.pdf，双击能打开看到里面是课程讲义内容。
+2. 把 PDF 放进项目文件夹：把这份 PDF 复制到上一步建的 airobot 文件夹里，文件名改成 讲义.pdf（中文文件名也行，认得出来就好）；
+验收：airobot 文件夹里能看到 讲义.pdf 这个文件。
+3. 装 chromadb 库：终端输 pip install chromadb 回车等装完——chromadb 是向量库，负责存你切好的文字段、还能按相似度搜；
+验收：终端输 pip show chromadb 看到 Name: chromadb。
+4. 装 pypdf 库：终端输 pip install pypdf 回车等装完——pypdf 用来读 PDF 里的文字；
+验收：终端输 pip show pypdf 看到 Name: pypdf。
+5. 新建文件 ingest.py（这一步把 PDF 灌进向量库）：在 airobot 文件夹里新建 ingest.py，把下面代码整个复制进去保存：
+```
+import pypdf
+import chromadb
+import hashlib
+import math
+
+# 离线 embedding：用字符 bigram 哈希成向量，不用下载任何模型
+# （Chroma 默认要下模型，国内网络常超时，所以我们自己算向量传进去）
+def embed(text, dim=256):
+    v = [0.0] * dim
+    chars = list(text)
+    for i in range(len(chars) - 1):
+        h = int(hashlib.md5((chars[i] + chars[i+1]).encode("utf-8")).hexdigest(), 16)
+        v[h % dim] += 1.0
+    for c in chars:
+        h = int(hashlib.md5(c.encode("utf-8")).hexdigest(), 16)
+        v[h % dim] += 0.5
+    norm = math.sqrt(sum(x * x for x in v)) or 1.0
+    return [x / norm for x in v]
+
+# ↓↓↓ 把"讲义.pdf"换成你的 PDF 文件名
+reader = pypdf.PdfReader("讲义.pdf")
+text = ""
+for page in reader.pages:
+    text += page.extract_text() + "\\n"
+
+# 把整篇文字切成小段，每段约 300 字
+chunk_size = 300
+chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
+print("共切成", len(chunks), "段")
+
+# 把每段存进 Chroma 向量库（向量我们自己算好直接传进去，不用 Chroma 下载模型）
+db = chromadb.PersistentClient(path="./vector_db")
+try:
+    db.delete_collection("course")
+except Exception:
+    pass
+collection = db.get_or_create_collection(name="course")
+collection.add(
+    ids=[str(i) for i in range(len(chunks))],
+    documents=chunks,
+    embeddings=[embed(c) for c in chunks]
+)
+print("已存入向量库", collection.count(), "条")
+```
+验收：ingest.py 文件保存好了，打开能看到上面这段代码。
+6. 运行 ingest.py 灌库：终端输 python ingest.py 回车；
+验收：看到打印"共切成 N 段"和"已存入向量库 N 条"，两个 N 一样说明全存进去了（这版自己算向量，不会卡在下载模型）。
+7. 新建文件 ask.py（这一步让学生提问、机器人检索后回答）：在 airobot 文件夹里新建 ask.py，把下面代码整个复制进去保存：
+```
+import chromadb
+from openai import OpenAI
+import hashlib
+import math
+
+# 离线 embedding：和 ingest.py 里一模一样的 embed 函数，自己算向量
+def embed(text, dim=256):
+    v = [0.0] * dim
+    chars = list(text)
+    for i in range(len(chars) - 1):
+        h = int(hashlib.md5((chars[i] + chars[i+1]).encode("utf-8")).hexdigest(), 16)
+        v[h % dim] += 1.0
+    for c in chars:
+        h = int(hashlib.md5(c.encode("utf-8")).hexdigest(), 16)
+        v[h % dim] += 0.5
+    norm = math.sqrt(sum(x * x for x in v)) or 1.0
+    return [x / norm for x in v]
+
+client = OpenAI(
+    api_key="这里贴你的DeepSeek密钥",
+    base_url="https://api.deepseek.com"
+)
+db = chromadb.PersistentClient(path="./vector_db")
+collection = db.get_or_create_collection(name="course")
+
+# ↓↓↓ 把"考试怎么算分"换成学生的问题
+question = "考试怎么算分"
+
+# 从向量库里搜跟问题最像的 3 段（向量自己算，用 query_embeddings 而不是 query_texts，避免触发下载）
+results = collection.query(query_embeddings=[embed(question)], n_results=3)
+context = "\\n".join(results["documents"][0])
+
+# 把搜到的段落 + 问题一起发给 DeepSeek，让它照着段落回答
+reply = client.chat.completions.create(
+    model="deepseek-flash",
+    messages=[
+        {"role": "system", "content": "你是课程答疑机器人，只根据下面的资料回答问题。资料里有的就照资料答，资料里没有的就老实说不知道，不要编造。\\n资料：\\n" + context},
+        {"role": "user", "content": question}
+    ]
+)
+print("机器人回答：", reply.choices[0].message.content)
+print("\\n来源段落：")
+for i, doc in enumerate(results["documents"][0]):
+    print("第", i+1, "段：", doc[:50], "...")
+```
+验收：ask.py 文件保存好了，api_key 引号里换成你的真实密钥了。
+8. 运行 ask.py 提问：终端输 python ask.py 回车（先去代码里把"考试怎么算分"换成讲义里真有的问题，比如"成绩怎么算""平时分 80 能及格吗"）；
+验收：打印出机器人回答 + 来源段落，回答内容确实是讲义里有的（不是瞎编的），第 2 步完成。
+不懂的概念当场补：什么是 embedding（把文字变成一串数字，意思接近的数字也接近）、什么是向量库（存这些数字、能按相似度搜的仓库）、chunk 切多大（太大找不到重点、太小断章取义，300 字是个起步值）、为什么要先检索（直接问大模型它会瞎编，先喂资料它才照着资料答）、为什么自己算向量不下载模型（Chroma 默认模型要从国外下，国内常超时，所以课程里用字符哈希自己算，零依赖能离线跑）。
+AI 协作训练点：先自己画 RAG 流程草图（不许问 AI），再让 AI 生成代码，重点审 AI 给的「检索召回策略」和「chunk 大小」合不合理，找出至少 2 处可改。', '课程文档 + RAG 代码 + 问答截图（带引用）+ AI 架构缺陷批注', '流程草图 25 / RAG 可运行 30 / 识别 AI 缺陷 25 / 带引用 20', 2),
+(1, '让机器人不胡编：主动找茬 + 加兜底', '目标：这一步教你两件事——①怎么判断 AI 回答对不对（看它引用的来源段落）②给 AI 加兜底，让它老实说"我不知道"而不是瞎编。
+怎么动手：
+1. 先学会判断 AI 答得对不对（很重要，后面全靠这个）：AI 回答完会打印"来源段落"，这是它答题时"看"的那几段讲义。判断方法很简单——AI 回答的内容，能不能在来源段落里找到原文？能找到就是照资料答的（对），找不到就是它自己编的（错）。比如你问"成绩怎么算"，AI 回答里提到"平时分 80"，来源段落里也有"平时分 80"这句话，就对；如果 AI 回答里提到"DeepSeek API"，但来源段落里根本没有成绩相关内容，那就是引用错了/瞎编。
+验收：能跟自己说一遍"判断对错看来源段落里有没有原文"这句话。
+2. 测第 1 类——问库里没有的：把 ask.py 里 question 改成"北京今天天气怎么样"，跑 python ask.py。
+验收：两个分支都正常，对照你测出来的是哪个：
+   - 正向分支（AI 老实）：AI 回答"资料里没有相关内容/我不知道"——说明 system prompt 起作用了，它没瞎编。
+   - 负向分支（AI 翻车）：AI 编了一段北京天气（比如"今天晴 25 度"）——说明 prompt 没兜住，它胡编了。
+不管哪个分支，都看一眼来源段落——来源段落里肯定没有"天气"相关内容，所以如果 AI 编了天气，就是纯粹瞎编。
+3. 测第 2 类——问答案散在多段的：把 question 改成"这门课的总成绩由哪几部分组成"，跑 python ask.py。
+验收：两个分支都正常，对照你测出来的是哪个：
+   - 正向分支（答对）：AI 回答"由平时成绩、期中项目、期末项目三部分组成"，且来源段落里能找到"平时""期中""期末"这些词。
+   - 负向分支（答错）：AI 漏了某部分，或者回答里提到了"DeepSeek API 文档"——这是因为讲义最后有参考书目，检索可能把参考书目那段也召回来了（里面有"课程""系统"等词），但它跟"成绩组成"无关，属于检索召回了不相关内容。
+判断标准：讲义原文写的是平时 30% + 期中 30% + 期末 40%，共三部分。AI 答对三部分且来源段落有原文就对。
+4. 测第 3 类——问需要推理的：把 question 改成"我平时分 80 能及格吗"，跑 python ask.py。
+验收：两个分支都正常，对照你测出来的是哪个：
+   - 正向分支（答对）：AI 回答"讲义没写明及格线，但平时分 80 且期中及格的话总评不低于 80 分"——它老实承认讲义没写及格线，只说了讲义里有的内容。
+   - 负向分支（答错）：AI 说"能及格"或"不能及格"——讲义根本没写及格线是 60 还是多少，它这是自己脑补的。
+判断标准：讲义只写了"平时分 80 且期中及格则总评不低于 80"，没写及格线。AI 只要没提"及格线是多少"就是对的，提了具体及格线就是瞎编。
+5. 给三次测试各写一条判断批注（不管翻没翻车都写）：每条写清"AI 实际回答了什么 + 属于正向还是负向分支 + 为什么"（是检索没召回到？是大模型硬编？还是资料本身没写清？还是 system prompt 起作用了？）。
+验收：3 条批注写完，每条都标注了正向/负向分支并说明了原因。
+6. 加兜底逻辑——用完整 ask.py 替换（之前只有 system prompt 兜底，现在加一层检索分数兜底：把相关度告诉大模型，让它自己判断怎么答，相关度低就老实说没找到）：把 ask.py 整个替换成下面这份：
+```
+import chromadb
+from openai import OpenAI
+import hashlib
+import math
+
+# 离线 embedding：和 ingest.py 里一模一样的 embed 函数
+def embed(text, dim=256):
+    v = [0.0] * dim
+    chars = list(text)
+    for i in range(len(chars) - 1):
+        h = int(hashlib.md5((chars[i] + chars[i+1]).encode("utf-8")).hexdigest(), 16)
+        v[h % dim] += 1.0
+    for c in chars:
+        h = int(hashlib.md5(c.encode("utf-8")).hexdigest(), 16)
+        v[h % dim] += 0.5
+    norm = math.sqrt(sum(x * x for x in v)) or 1.0
+    return [x / norm for x in v]
+
+client = OpenAI(
+    api_key="这里贴你的DeepSeek密钥",
+    base_url="https://api.deepseek.com"
+)
+db = chromadb.PersistentClient(path="./vector_db")
+collection = db.get_or_create_collection(name="course")
+
+# ↓↓↓ 把"北京今天天气怎么样"换成你想问的问题
+question = "北京今天天气怎么样"
+
+results = collection.query(query_embeddings=[embed(question)], n_results=3)
+
+# 检索分数兜底：把相关度告诉大模型，让它自己判断怎么回答
+# （始终调用大模型，学生能看到回复有成就感；相关度低时用 hint 提醒大模型老实点别瞎编）
+score = results["distances"][0][0]
+if score > 0.95:
+    hint = "注意：检索到的内容跟问题相关度较低，如果内容不相关请直接说''这份讲义里没有这方面的内容''，不要编造。"
+else:
+    hint = ""
+
+context = "\\n".join(results["documents"][0])
+reply = client.chat.completions.create(
+    model="deepseek-flash",
+    messages=[
+        {"role": "system", "content": "你是课程答疑机器人，只根据下面的资料回答问题。\\n规则：\\n1. 资料里有明确答案的，就照资料回答；\\n2. 资料里只有部分相关的，就说''资料里提到了XX，但没有提到YY''；\\n3. 资料里完全没有相关内容的，就说''这份讲义里没有这方面的内容''；\\n4. 绝对不要编造资料里没有的信息。\\n" + hint + "\\n资料：\\n" + context},
+        {"role": "user", "content": question}
+    ]
+)
+print("机器人回答：", reply.choices[0].message.content)
+print("\\n来源段落：")
+for i, doc in enumerate(results["documents"][0]):
+    print("第", i+1, "段：", doc[:50], "...")
+```
+验收：ask.py 保存好了，api_key 换成了你的真实密钥。
+7. 重测确认兜底生效：把 question 改成"北京今天天气怎么样"，跑 python ask.py。
+验收：AI 回答''这份讲义里没有这方面的内容''或类似意思（大模型看到相关度低的提示后老实说的），不再瞎编北京天气，第 3 步完成。
+不懂的概念当场补：什么是幻觉（大模型一本正经地编造不存在的内容）、召回率（该检索到的有没有检索到）、余弦距离（0 是完全一样，越大越不相关，最大 2）、阈值（0.95 是起步值，越小越严格）。
+AI 协作训练点：翻车场景你自己设计，让 AI 帮你写兜底逻辑，审 AI 的兜底方案有没有漏洞（比如阈值定得太松还是太紧）。', '3 类翻车测试记录 + 缺陷批注 + 兜底代码 + 修复前后对比', '翻车场景设计 30 / 缺陷识别 30 / 兜底有效 25 / 对比清晰 15', 3),
+(1, '给机器人一个界面：套个网页', '目标：给机器人一个界面——套个网页，浏览器里直接聊，不用再敲命令行了。
+怎么动手：
+1. 装 Gradio：终端输 pip install gradio 回车等装完——Gradio 是个能把 Python 代码一键套上网页界面的库，专门给不会写前端的人用；
+验收：终端输 pip show gradio 看到 Name: gradio。
+2. 新建文件 app.py：在 airobot 文件夹里新建 app.py，把下面代码整个复制进去保存（它把你前面写的 RAG 检索 + 兜底逻辑包进一个网页界面，用的还是离线 embed 函数自己算向量）：
+```
+import os
+import gradio as gr
+import chromadb
+from openai import OpenAI
+import hashlib
+import math
+
+# 离线 embedding：和 ingest.py / ask.py 里一样的 embed 函数
+def embed(text, dim=256):
+    v = [0.0] * dim
+    chars = list(text)
+    for i in range(len(chars) - 1):
+        h = int(hashlib.md5((chars[i] + chars[i+1]).encode("utf-8")).hexdigest(), 16)
+        v[h % dim] += 1.0
+    for c in chars:
+        h = int(hashlib.md5(c.encode("utf-8")).hexdigest(), 16)
+        v[h % dim] += 0.5
+    norm = math.sqrt(sum(x * x for x in v)) or 1.0
+    return [x / norm for x in v]
+
+client = OpenAI(
+    api_key="这里贴你的DeepSeek密钥",
+    base_url="https://api.deepseek.com"
+)
+db = chromadb.PersistentClient(path="./vector_db")
+collection = db.get_or_create_collection(name="course")
+
+def chat(question):
+    # 检索 + 兜底 + 调大模型，和 ask.py 逻辑一致（始终调大模型，相关度低用 hint 提醒大模型老实点）
+    results = collection.query(query_embeddings=[embed(question)], n_results=3)
+    score = results["distances"][0][0]
+    if score > 0.95:
+        hint = "注意：检索到的内容跟问题相关度较低，如果内容不相关请直接说''这份讲义里没有这方面的内容''，不要编造。"
+    else:
+        hint = ""
+    context = "\\n".join(results["documents"][0])
+    reply = client.chat.completions.create(
+        model="deepseek-flash",
+        messages=[
+            {"role": "system", "content": "你是课程答疑机器人，只根据下面的资料回答问题。\\n规则：\\n1. 资料里有明确答案的，就照资料回答；\\n2. 资料里只有部分相关的，就说''资料里提到了XX，但没有提到YY''；\\n3. 资料里完全没有相关内容的，就说''这份讲义里没有这方面的内容''；\\n4. 绝对不要编造资料里没有的信息。\\n" + hint + "\\n资料：\\n" + context},
+            {"role": "user", "content": question}
+        ]
+    )
+    return reply.choices[0].message.content
+
+# 套一个网页界面：上面输入框打字、点提交，下面显示机器人回答
+gr.Interface(fn=chat, inputs="text", outputs="text", title="本校答疑机器人").launch()
+```
+验收：app.py 文件保存好了，api_key 引号里换成你的真实密钥了。
+3. 运行打开网页：终端输 python app.py 回车；
+验收：看到一串 Running on local URL: http://127.0.0.1:7860，浏览器自动弹出一个网页，标题是"本校答疑机器人"。
+4. 在浏览器里聊：网页上面的输入框打字、点 Submit 提交，机器人回答显示在下面输出框；
+验收：连续聊 3 句、机器人每句都回话，第 4 步完成。
+不懂的概念当场补：什么是前端组件（输入框、按钮这些网页上的零件）、Gradio 怎么跑（它在你电脑上开个小服务器，浏览器访问就能用）、多轮对话怎么存上下文（这版先不做，每个问题独立答，下版可以加）。
+AI 协作训练点：先自己想界面长啥样，让 AI 生成 Gradio 代码，报错和 AI 排查，找出 AI 代码至少 1 处可优化。', '界面代码 + 浏览器对话截图 + AI 代码缺陷批注', '先想再问 AI 30 / 界面可用 30 / 识别 AI 缺陷 25 / 多轮对话 15', 4),
+(1, '把机器人上线：部署出去', '目标：把机器人上线——部署到国内免费平台，老师同学不用翻墙就能访问，你的作品能写进简历了。
+为什么不用 Hugging Face：它是国外网站，国内大陆打不开（要翻墙），这一步改用阿里出的「魔搭社区 ModelScope」，国内直接访问、免费 CPU、操作跟它几乎一样。
+怎么动手：
+1. 注册魔搭账号：浏览器打开 https://www.modelscope.cn ，点右上角「登录」，用手机号或支付宝扫码登录（没账号会自动注册）；
+验收：登录后右上角能看到自己的头像，鼠标放上去能看到用户名。
+2. 改 app.py 准备上云（密钥不能写在代码里传到网上，会泄露；顺便加上云端自动灌库，这样只传 3 个文件就行）：把 app.py 整个换成下面这段，跟第四阶段逻辑一样，只是密钥改成从环境变量读、第一次启动自动从讲义.pdf 灌库：
+```
+import os
+import gradio as gr
+import chromadb
+from openai import OpenAI
+import hashlib
+import math
+import pypdf
+
+def embed(text, dim=256):
+    v = [0.0] * dim
+    chars = list(text)
+    for i in range(len(chars) - 1):
+        h = int(hashlib.md5((chars[i] + chars[i+1]).encode("utf-8")).hexdigest(), 16)
+        v[h % dim] += 1.0
+    for c in chars:
+        h = int(hashlib.md5(c.encode("utf-8")).hexdigest(), 16)
+        v[h % dim] += 0.5
+    norm = math.sqrt(sum(x * x for x in v)) or 1.0
+    return [x / norm for x in v]
+
+# 部署后密钥从环境变量读，不写死在代码里（密钥在网页后台单独填，第6步教）
+client = OpenAI(
+    api_key=os.environ["DEEPSEEK_API_KEY"],
+    base_url="https://api.deepseek.com"
+)
+db = chromadb.PersistentClient(path="./vector_db")
+collection = db.get_or_create_collection(name="course")
+
+# 云端第一次启动时向量库是空的，自动从讲义.pdf灌库（所以不用上传整个 vector_db 文件夹）
+if collection.count() == 0:
+    reader = pypdf.PdfReader("讲义.pdf")
+    text = ""
+    for page in reader.pages:
+        text += page.extract_text() + "\\n"
+    chunks = [text[i:i+300] for i in range(0, len(text), 300)]
+    collection.add(
+        ids=[str(i) for i in range(len(chunks))],
+        documents=chunks,
+        embeddings=[embed(c) for c in chunks]
+    )
+
+def chat(question):
+    results = collection.query(query_embeddings=[embed(question)], n_results=3)
+    score = results["distances"][0][0]
+    if score > 0.95:
+        hint = "注意：检索到的内容跟问题相关度较低，如果内容不相关请直接说''这份讲义里没有这方面的内容''，不要编造。"
+    else:
+        hint = ""
+    context = "\\n".join(results["documents"][0])
+    reply = client.chat.completions.create(
+        model="deepseek-flash",
+        messages=[
+            {"role": "system", "content": "你是课程答疑机器人，只根据下面的资料回答问题。\\n规则：\\n1. 资料里有明确答案的，就照资料回答；\\n2. 资料里只有部分相关的，就说''资料里提到了XX，但没有提到YY''；\\n3. 资料里完全没有相关内容的，就说''这份讲义里没有这方面的内容''；\\n4. 绝对不要编造资料里没有的信息。\\n" + hint + "\\n资料：\\n" + context},
+            {"role": "user", "content": question}
+        ]
+    )
+    return reply.choices[0].message.content
+
+gr.Interface(fn=chat, inputs="text", outputs="text", title="本校答疑机器人").launch()
+```
+验收：app.py 里 api_key 那行是 os.environ["DEEPSEEK_API_KEY"]，看不到 sk- 明文了，代码保存好了。
+3. 新建 requirements.txt（告诉云端要装哪些库）：在 airobot 文件夹里新建 requirements.txt，内容如下：
+```
+openai
+chromadb
+pypdf
+gradio
+```
+验收：airobot 文件夹里能看到 app.py、requirements.txt、讲义.pdf 这三个要上传的文件。
+4. 创建创空间：浏览器打开 https://www.modelscope.cn/studios ，点页面右上角蓝色按钮「我要创建」；英文名称填 airobot（只能英文小写、数字和连字符），中文名称填「本校答疑机器人」，是否公开选「公开」（不然同学打不开），其他不用填，点「创建」；创建后弹窗点「我知道了」，进入创空间详情页，能看到顶部三个标签：「内容」「交流」「空间管理」，下方是三步部署流程：第1步「空间文件」→ 第2步「部署设置」→ 第3步「确认并部署」；
+验收：进入创空间详情页，顶部能看到「内容」「交流」「空间管理」三个标签，下方有三步部署流程的指示器。
+5. 上传三个文件（在三步流程的第1步「空间文件」里）：在第1步页面有一个虚线框上传区域（写着「拖拽文件或文件夹到这里」），把本地 airobot 文件夹里的 app.py、requirements.txt、讲义.pdf 三个文件依次拖到虚线框里（或者点旁边的「通过Git上传」用 Git 方式传）；每次上传会自动提交到 Git 仓库，传完后文件列表里能看到三个文件，底部出现「下一步：部署设置」按钮；
+验收：文件列表里能看到 app.py、requirements.txt、讲义.pdf 三个文件，app.py 是你刚改的环境变量版本，底部出现「下一步：部署设置」按钮。
+6. 配置部署设置 + 填密文变量（在三步流程的第2步「部署设置」里，密钥就在这一步填，不是在「空间管理」里）：点底部「下一步：部署设置」进入第2步，页面顶部有两个标签「可视化配置」和「JSON配置」，保持在「可视化配置」；应用部署框架选「Gradio」（版本选默认的即可）；关联云资源选「免费CPU，按需分配」（2v CPU / 8G内存，免费够用）；镜像版本选默认推荐的（不用改）；然后往下滚动找到「密文管理」区域（注意不是上面的「明文变量」——明文变量是给不敏感的配置用的，密钥要放「密文管理」）→ 点「添加密文变量」→ 第一个输入框（变量名，提示文字写着「密文变量名称，如 SSH_KEY」）填 DEEPSEEK_API_KEY（必须一字不差，跟代码里 os.environ 读的名字对应）→ 第二个输入框（密文值，提示文字写着「请输入密文，无输入默认为空值」）粘贴你的 sk- 真实密钥 → 填完点底部「保存」；
+验收：第2步「部署设置」显示已配置：框架=Gradio、云资源=免费CPU、密文管理里有一条 DEEPSEEK_API_KEY 变量（保存后不显示具体值，只能看到变量名，这是正常的保密机制）。
+7. 确认并部署 + 等部署成功：点底部「确认并部署」进入第3步，平台开始自动装库 + 部署（第一次大概 2-5 分钟）；回到「内容」标签页，等状态从「部署中」变成「运行中」，页面中间会出现聊天界面；把浏览器地址栏的链接（形如 https://www.modelscope.cn/studios/你的用户名/airobot ）复制出来发给同学；
+验收：自己在页面上问一句"成绩怎么算"机器人能照讲义回答，再把链接用手机或别人电脑打开、不用登录也能聊，第 5 步完成。
+不懂的概念当场补：什么是部署（把代码放到一台一直开着、连着公网的电脑上，别人随时能访问）、什么是环境变量（云端后台的配置项，代码用 os.environ 读，密钥就不用写进代码被别人看到）、明文变量和密文管理的区别（明文变量存完能看到值，密文管理存完只看到名字看不到值，适合放密钥）、免费 CPU 的限制（免费档跑得慢、长时间没人访问会休眠，第一次重新打开要等几十秒，做个人作品演示完全够）、为什么密钥不能传上网（代码仓库别人能看到，密钥泄露别人会盗刷你的余额）。
+AI 协作训练点：部署报错先看「部署日志 / Logs」里红色报错最后一行，复制给 AI 一起排查，独立解决至少 1 个部署坑（比如缺库、文件路径不对、环境变量名字拼错）。', '部署公开链接 + 同学试玩反馈 + 部署排错记录', '独立排错 50 / 部署成功 50', 5);
+
+
+-- 参考微课（按需查阅，不是主课程）
+INSERT INTO `resource` (`task_id`, `title`, `video_url`, `description`) VALUES
+(1, '怎么注册智谱 GLM 拿 API 密钥', NULL, '不知道去哪拿 key 时再看'),
+(1, 'Python 环境和 pip 怎么装', NULL, '没装过 Python 时看'),
+(2, 'RAG 原理一句话讲清', NULL, '不懂检索增强时看'),
+(2, 'Chroma 向量库怎么用', NULL, '向量库卡住时看'),
+(3, '大模型幻觉是什么', NULL, '不懂翻车原理时看'),
+(4, 'Gradio 怎么快速出界面', NULL, '界面写不出时看'),
+(5, '免费托管平台对比', NULL, '不知道部署到哪时看');

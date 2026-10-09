@@ -1,0 +1,68 @@
+# 用法：
+#   1. 服务器上 cd 到项目根目录
+#   2. 第一次启动：docker compose up -d --build
+#   3. 之后启动：  docker compose up -d
+#   4. 看日志：    docker compose logs -f backend
+#   5. 停止：     docker compose down
+#   6. 重新构建：  docker compose up -d --build
+#
+# 改下面 .env 里你想改的（数据库密码、JWT 密钥），别改这个文件本身。
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: aitrain-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ai_train_platform
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306" # 不想暴露可改 "127.0.0.1:3306:3306"
+    volumes:
+      # 数据持久化到宿主机，容器删了数据不丢
+      - mysql_data:/var/lib/mysql
+      # 第一次启动自动执行 init.sql 建表 + 灌种子数据
+      - ./backend/src/main/resources/sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build: ./backend
+    container_name: aitrain-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      # 指向 compose 里的 mysql 服务（容器名互通）
+      MYSQL_URL: jdbc:mysql://mysql:3306/ai_train_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
+      MYSQL_USER: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      # 生产环境不让 Spring 启动时重建表（init.sql 已由 mysql 容器首启时执行）
+      SQL_INIT_MODE: never
+      JWT_SECRET: ${JWT_SECRET}
+      UPLOAD_DIR: /app/upload
+      TZ: Asia/Shanghai
+    ports:
+      - "6001:6001"
+    volumes:
+      # 上传的文件持久化到宿主机
+      - upload_data:/app/upload
+
+  frontend:
+    build: ./frontend
+    container_name: aitrain-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    # nginx.conf 里用 backend:6001 反代到后端容器，compose 网络里能直连
+
+volumes:
+  mysql_data:
+  upload_data:
