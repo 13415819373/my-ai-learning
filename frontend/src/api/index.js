@@ -24,3 +24,6 @@ export const uploadFile = (file) => {
     headers: { 'Content-Type': 'multipart/form-data' }
   })
 }
+
+// 发送验证码邮件（调后端 MailController -> Resend）
+export const sendEmail = (to) => http.post('/mail/send-email', { to })

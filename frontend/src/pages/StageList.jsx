@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { getStages } from '../api'
+import { getStages, sendEmail } from '../api'
 
 // 卖点标签：根据阶段序号匹配
 const STAGE_TAGS = ['目标拆解', '分模块自学', '端到端实战', '求职复盘']
@@ -8,6 +8,8 @@ const STAGE_TAGS = ['目标拆解', '分模块自学', '端到端实战', '求�
 export default function StageList() {
   const [stages, setStages] = useState([])
   const [loading, setLoading] = useState(true)
+  const [email, setEmail] = useState('')
+  const [mailMsg, setMailMsg] = useState('')
 
   useEffect(() => {
     getStages()
@@ -15,6 +17,19 @@ export default function StageList() {
       .catch((err) => alert(err.message))
       .finally(() => setLoading(false))
   }, [])
+
+  // 发验证码邮件：调后端 MailController -> Resend
+  const sendMail = async () => {
+    const to = email.trim()
+    if (!to) { alert('请输入邮箱'); return }
+    setMailMsg('发送中...')
+    try {
+      const res = await sendEmail(to)
+      setMailMsg(`发送成功！验证码：${res.data.code}（已发到 ${to}）`)
+    } catch (err) {
+      setMailMsg('发送失败：' + err.message)
+    }
+  }
 
   if (loading) return <p className="muted">加载中...</p>
 
@@ -86,6 +101,21 @@ export default function StageList() {
           </div>
         </Link>
       ))}
+
+      {/* 发邮件测试区（练手用） */}
+      <div className="card" style={{ marginTop: 20, padding: 20 }}>
+        <h3 style={{ marginBottom: 10, fontSize: 16 }}>📧 发送验证码邮件（测试 Resend）</h3>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="输入收件邮箱"
+            style={{ flex: 1, minWidth: 220, padding: '6px 10px', borderRadius: 6, border: '1px solid #ccc' }}
+          />
+          <button className="btn" onClick={sendMail}>发送验证码</button>
+        </div>
+        {mailMsg && <p style={{ marginTop: 10, fontSize: 13, color: '#475569' }}>{mailMsg}</p>}
+      </div>
     </div>
   )
 }
