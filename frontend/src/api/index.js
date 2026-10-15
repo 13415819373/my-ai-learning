@@ -27,3 +27,9 @@ export const uploadFile = (file) => {
 
 // 发送验证码邮件（调后端 MailController -> Resend）
 export const sendEmail = (to) => http.post('/mail/send-email', { to })
+
+// 读取公开 GitHub 仓库（调后端 GitHubController，返回仓库信息 + 文件树）
+export const fetchGitHubRepo = (url) => http.post('/github/repo', { url })
+
+// 读取仓库里某个文件的内容
+export const fetchGitHubFile = (url, path) => http.post('/github/file', { url, path })

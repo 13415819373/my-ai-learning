@@ -34,9 +34,9 @@ mybatis-plus:
 file:
   upload-dir: ${UPLOAD_DIR:./upload}
 
-# Resend 邮件（发验证码用）：key 从环境变量注入，不写死进代码（防止进 git 泄露）
+# Resend 邮件（发验证码用）：优先读环境变量 RESEND_API_KEY，没设则用默认值（ABC 是假的，仅保证启动不报错；真发邮件要换成真实 key）
 resend:
-  api-key: ${RESEND_API_KEY}
+  api-key: ${RESEND_API_KEY:ABC}
 
 jwt:
   # 生产环境务必更换为更复杂的密钥（Docker 启动时用环境变量覆盖）
