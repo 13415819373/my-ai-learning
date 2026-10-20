@@ -11,6 +11,7 @@
 services:
   mysql:
     image: mysql:8.0
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     container_name: aitrain-mysql
     restart: unless-stopped
     environment:
@@ -18,7 +19,7 @@ services:
       MYSQL_DATABASE: ai_train_platform
       TZ: Asia/Shanghai
     ports:
-      - "3306:3306" # 不想暴露可改 "127.0.0.1:3306:3306"
+      - "127.0.0.1:3306:3306"
     volumes:
       # 数据持久化到宿主机，容器删了数据不丢
       - mysql_data:/var/lib/mysql
@@ -38,8 +39,11 @@ services:
       mysql:
         condition: service_healthy
     environment:
+      JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
       # 指向 compose 里的 mysql 服务（容器名互通）
-      MYSQL_URL: jdbc:mysql://mysql:3306/ai_train_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
+      MYSQL_URL: jdbc:mysql://mysql:3306/ai_train_platform?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
       MYSQL_USER: root
       MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       # 生产环境不让 Spring 启动时重建表（init.sql 已由 mysql 容器首启时执行）
@@ -47,8 +51,8 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       UPLOAD_DIR: /app/upload
       TZ: Asia/Shanghai
-    ports:
-      - "6001:6001"
+    expose:
+      - "6001"
     volumes:
       # 上传的文件持久化到宿主机
       - upload_data:/app/upload

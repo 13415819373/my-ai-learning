@@ -4,7 +4,7 @@
 -- 改了本文件，重启后端立即生效（pom.xml 已配 resources overwrite=true）
 -- 上线前请改为幂等模式（CREATE IF NOT EXISTS + INSERT IGNORE）或关闭 spring.sql.init
 -- =============================================
-
+SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- 按依赖反序删除旧表
