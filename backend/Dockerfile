@@ -4,6 +4,7 @@ FROM maven:3.9.9-eclipse-temurin-21 AS builder
 WORKDIR /build
 # 先只拷 pom.xml，预解析依赖（依赖没变时这层走缓存）
 # 注意：go-offline 在 Spring Boot 项目里会失败，改用 resolve + 兜底
+COPY settings.xml /root/.m2/settings.xml
 COPY pom.xml .
 RUN mvn dependency:resolve -B -Dmaven.test.skip=true || true
 
